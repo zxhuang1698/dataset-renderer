@@ -65,7 +65,7 @@ def normalize_objs(objs: List[bproc.types.MeshObject]):
         obj.set_scale(obj.get_scale() * scale)
         obj.persist_transformation_into_mesh()
 
-def render_gso_object(obj_path, output_base_path, hdri_path):
+def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distance):
     bproc.init()
     # Load object
     objs = bproc.loader.load_obj(obj_path)
@@ -81,18 +81,29 @@ def render_gso_object(obj_path, output_base_path, hdri_path):
     bproc.world.set_world_background_hdr_img(hdri_path)
 
     # Set up camera
-    fov = 0.698132
     bproc.camera.set_resolution(512, 512)
     bproc.camera.set_intrinsics_from_blender_params(lens=fov, lens_unit="FOV")
 
     # Define rendering settings
     bproc.renderer.set_max_amount_of_samples(128)
     bproc.renderer.set_noise_threshold(0.01)
+    
+    # Set output format
+    bproc.renderer.enable_depth_output(activate_antialiasing=False)
+    bproc.renderer.enable_normals_output()
+    bproc.renderer.enable_diffuse_color_output()
+    bproc.renderer.set_output_format(enable_transparency=True)
 
     # Create output directories
     images_path = os.path.join(output_base_path, "images")
+    depths_path = os.path.join(output_base_path, "depths")
+    normals_path = os.path.join(output_base_path, "normals")
+    diffuses_path = os.path.join(output_base_path, "diffuses")
     annos_path = os.path.join(output_base_path, "annos")
     os.makedirs(images_path, exist_ok=True)
+    os.makedirs(depths_path, exist_ok=True)
+    os.makedirs(normals_path, exist_ok=True)
+    os.makedirs(diffuses_path, exist_ok=True)
     os.makedirs(annos_path, exist_ok=True)
 
     azims = [0, 90, 180, 270]
@@ -110,7 +121,7 @@ def render_gso_object(obj_path, output_base_path, hdri_path):
             # Calculate camera position
             azim_rad = (azim + azim_offset) * math.pi / 180
             polar_rad = (90 - elev) * math.pi / 180
-            r = 1.8  # camera distance
+            r = camera_distance  # camera distance
 
             x = r * math.sin(polar_rad) * math.cos(azim_rad)
             y = r * math.sin(polar_rad) * math.sin(azim_rad)
@@ -130,14 +141,46 @@ def render_gso_object(obj_path, output_base_path, hdri_path):
 
     # Render
     data = bproc.renderer.render()
+    bproc.writer.write_hdf5(os.path.join(output_base_path, "data.hdf5"), data)
     
     # Save images and annotations
     num_images = len(data["colors"])
     for i in range(num_images):
-        rgb = data["colors"][i]
+        img = data["colors"][i]
         # save image with opencv
         image_path = os.path.join(images_path, f"image_{i:04d}.png")
-        cv2.imwrite(image_path, cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA))
+        
+        # save diffuse color
+        diffuse = data["diffuse"][i]
+        diffuse_path = os.path.join(diffuses_path, f"diffuse_{i:04d}.png")
+        cv2.imwrite(diffuse_path, cv2.cvtColor(diffuse, cv2.COLOR_RGB2BGR))
+        
+        # save depth as npy
+        depth = data["depth"][i]
+        depth_path = os.path.join(depths_path, f"depth_{i:04d}.npy")
+        np.save(depth_path, depth)
+        
+        # save depth as png for visualization
+        # depth[depth > 100] = 0
+        # depth_img = (depth - np.min(depth)) / (np.max(depth) - np.min(depth)) * 255
+        # depth_img = depth_img.astype(np.uint8)
+        # depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2BGR)
+        # depth_img_path = os.path.join(depths_path, f"depth_{i:04d}.png")
+        # cv2.imwrite(depth_img_path, depth_img)
+        
+        # save normals as npy
+        normal = data["normals"][i]
+        normal_path = os.path.join(normals_path, f"normal_{i:04d}.npy")
+        np.save(normal_path, normal)
+        
+        # save normals as png for visualization
+        # normal_img = (normal + 1) / 2 * 255
+        # normal_img = normal_img.astype(np.uint8)
+        # normal_img = cv2.cvtColor(normal_img, cv2.COLOR_RGB2BGR)
+        # normal_img_path = os.path.join(normals_path, f"normal_{i:04d}.png")
+        # cv2.imwrite(normal_img_path, normal_img)
+        
         
         # save annotation
         anno = {
@@ -186,10 +229,14 @@ def main():
                         default="examples/mesh/model.obj")
     parser.add_argument('--output', type=str, help='Path to the output directory',
                         default="examples/output")
+    parser.add_argument('--fov', type=float, help='Field of view in radians', default=0.698132)
+    parser.add_argument('--camera_distance', type=float, help='Camera distance from the object', default=1.8)
     args = parser.parse_args()
 
     input_path = args.input
     output_path = args.output
+    fov = args.fov
+    camera_distance = args.camera_distance
     hdri_base_path = "/home/zixuan32/projects/rendering/blender_proc/assets/hdris"
     os.makedirs(output_path, exist_ok=True)
 
@@ -200,7 +247,7 @@ def main():
         hdri_path = random.choice(hdri_files)
         print(f"Rendering object: {input_path}")
         print(f"Using HDRI: {hdri_path}")
-        render_gso_object(input_path, output_path, hdri_path)
+        render_gso_object(input_path, output_path, hdri_path, fov, camera_distance)
     else:
         print(f"Object file not found: {input_path}")
 
