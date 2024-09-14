@@ -3,9 +3,7 @@ import numpy as np
 import os
 import json
 import math
-from pathlib import Path
 import random
-from PIL import Image
 import trimesh
 import cv2
 import argparse
@@ -87,12 +85,6 @@ def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distanc
     # Define rendering settings
     bproc.renderer.set_max_amount_of_samples(128)
     bproc.renderer.set_noise_threshold(0.01)
-    
-    # Set output format
-    bproc.renderer.enable_depth_output(activate_antialiasing=False)
-    bproc.renderer.enable_normals_output()
-    bproc.renderer.enable_diffuse_color_output()
-    bproc.renderer.set_output_format(enable_transparency=True)
 
     # Create output directories
     images_path = os.path.join(output_base_path, "images")
@@ -139,11 +131,17 @@ def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distanc
             annos["polar"].append(polar_rad)
             annos["fov_rad"].append(fov)
 
+    # Set output format
+    bproc.renderer.enable_depth_output(activate_antialiasing=False)
+    bproc.renderer.enable_normals_output()
+    bproc.renderer.enable_diffuse_color_output()
+    bproc.renderer.set_output_format(enable_transparency=True)
+    
     # Render
     data = bproc.renderer.render()
-    bproc.writer.write_hdf5(os.path.join(output_base_path, "data.hdf5"), data)
     
     # Save images and annotations
+    pc_all = []
     num_images = len(data["colors"])
     for i in range(num_images):
         img = data["colors"][i]
@@ -161,26 +159,10 @@ def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distanc
         depth_path = os.path.join(depths_path, f"depth_{i:04d}.npy")
         np.save(depth_path, depth)
         
-        # save depth as png for visualization
-        # depth[depth > 100] = 0
-        # depth_img = (depth - np.min(depth)) / (np.max(depth) - np.min(depth)) * 255
-        # depth_img = depth_img.astype(np.uint8)
-        # depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2BGR)
-        # depth_img_path = os.path.join(depths_path, f"depth_{i:04d}.png")
-        # cv2.imwrite(depth_img_path, depth_img)
-        
         # save normals as npy
         normal = data["normals"][i]
         normal_path = os.path.join(normals_path, f"normal_{i:04d}.npy")
         np.save(normal_path, normal)
-        
-        # save normals as png for visualization
-        # normal_img = (normal + 1) / 2 * 255
-        # normal_img = normal_img.astype(np.uint8)
-        # normal_img = cv2.cvtColor(normal_img, cv2.COLOR_RGB2BGR)
-        # normal_img_path = os.path.join(normals_path, f"normal_{i:04d}.png")
-        # cv2.imwrite(normal_img_path, normal_img)
-        
         
         # save annotation
         anno = {
@@ -193,25 +175,20 @@ def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distanc
         with open(anno_path, 'w') as f:
             json.dump(anno, f, indent=2)
 
-    # Generate point cloud using trimesh
-    all_meshes = []
-    for obj in objs:
-        mesh = obj.get_mesh()
-        vertices = np.array([v.co for v in mesh.vertices])
-        faces = np.array([f.vertices for f in mesh.polygons])
-        
-        # Create trimesh object
-        tri_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-        all_meshes.append(tri_mesh)
-        
-    # Combine all meshes into a single mesh
-    combined_mesh = trimesh.util.concatenate(all_meshes)
-    
-    # Sample points on the surface
-    points = combined_mesh.sample(10000)
+        # generate point cloud using back projection
+        pc_xyz = bproc.camera.pointcloud_from_depth(depth, frame=i) # [H, W, 3]
+        pc_xyz = pc_xyz[depth < 100] # [N, 3]
+        pc_rgb = diffuse # [H, W, 3]
+        pc_rgb = pc_rgb[depth < 100] # [N, 3]
+        pc = np.concatenate([pc_xyz, pc_rgb], axis=-1) # [N, 6]
+        pc_all.append(pc)
+
+    # Concatenate all point clouds and randomly sample 10000 points
+    points = np.concatenate(pc_all, axis=0)
+    points = points[np.random.choice(points.shape[0], 10000, replace=False)]
     
     # Save point cloud as PLY
-    point_cloud = trimesh.points.PointCloud(points)
+    point_cloud = trimesh.PointCloud(vertices=points[:, :3], colors=points[:, 3:])
     point_cloud.export(os.path.join(output_base_path, "pointcloud.ply"))
 
 # Function to get all HDRI files recursively
