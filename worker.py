@@ -63,7 +63,52 @@ def normalize_objs(objs: List[bproc.types.MeshObject]):
         obj.set_scale(obj.get_scale() * scale)
         obj.persist_transformation_into_mesh()
 
-def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distance):
+def uniform_cameras(samples=100, radius=1.8):
+    '''
+    Generate camera positions evenly distributed on a sphere.
+    https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere
+    Returns a list of tuples (x, y, z) representing the camera positions.
+    '''
+    cameras = []
+    phi = math.pi * (math.sqrt(5.) - 1.)
+    for i in range(samples):
+        y = 1 - (i / float(samples - 1)) * 2
+        r = math.sqrt(1 - y * y)
+        theta = phi * i
+        x = math.cos(theta) * r
+        z = math.sin(theta) * r
+        cameras.append((x * radius, y * radius, z * radius))
+    return cameras, None
+
+def orbit_cameras(n_azim=8, n_elev=4, radius=1.8, elev_range=(0, 60), random_offset=False):
+    '''
+    Generate camera positions on multiple orbits evenly distributed in the elevation range.
+    Returns a list of tuples (x, y, z) representing the camera positions and annotations.
+    '''
+    cameras = []
+    annos = {"azimuth": [], "polar": []}
+    azims = np.linspace(0, 360, n_azim, endpoint=False)
+    elevs = np.linspace(elev_range[0], elev_range[1], n_elev)
+    for elev in elevs:
+        azim_offset = np.random.uniform(-180/n_azim, 180/n_azim) if random_offset else 0
+        for azim in azims:
+            azim_rad = (azim + azim_offset) * math.pi / 180
+            polar_rad = (90 - elev) * math.pi / 180
+            x = radius * math.sin(polar_rad) * math.cos(azim_rad)
+            y = radius * math.sin(polar_rad) * math.sin(azim_rad)
+            z = radius * math.cos(polar_rad)
+            cameras.append((x, y, z))
+            annos["azimuth"].append(azim_rad)
+            annos["polar"].append(polar_rad)
+    return cameras, annos
+
+def render_gso_object(
+        obj_path, output_base_path, hdri_path, 
+        fov=0.698132, camera_distance=1.8, resolution=512,
+        n_azim=8, n_elev=4, generate_pc=True, n_sphere_cam=100,
+        random_offset=False
+    ):
+                      
     bproc.init()
     # Load object
     objs = bproc.loader.load_obj(obj_path)
@@ -79,7 +124,7 @@ def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distanc
     bproc.world.set_world_background_hdr_img(hdri_path)
 
     # Set up camera
-    bproc.camera.set_resolution(512, 512)
+    bproc.camera.set_resolution(resolution, resolution)
     bproc.camera.set_intrinsics_from_blender_params(lens=fov, lens_unit="FOV")
 
     # Define rendering settings
@@ -97,39 +142,21 @@ def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distanc
     os.makedirs(normals_path, exist_ok=True)
     os.makedirs(diffuses_path, exist_ok=True)
     os.makedirs(annos_path, exist_ok=True)
-
-    azims = [0, 90, 180, 270]
-    elevs = [0, 15, 30, 45]
-    annos = {
-        "camera_dist": [],
-        "azimuth": [],
-        "polar": [],
-        "fov_rad": [],
-    }
-    # Render from different viewpoints
-    for elev in elevs:
-        azim_offset = random.uniform(-45, 45)
-        for azim in azims:
-            # Calculate camera position
-            azim_rad = (azim + azim_offset) * math.pi / 180
-            polar_rad = (90 - elev) * math.pi / 180
-            r = camera_distance  # camera distance
-
-            x = r * math.sin(polar_rad) * math.cos(azim_rad)
-            y = r * math.sin(polar_rad) * math.sin(azim_rad)
-            z = r * math.cos(polar_rad)
-            location = np.array([x, y, z])
-
-            # Set camera pose
-            rotation_matrix = bproc.camera.rotation_from_forward_vec(-location)
-            cam2world_matrix = bproc.math.build_transformation_mat(location, rotation_matrix)
-            bproc.camera.add_camera_pose(cam2world_matrix)
-            
-            # Write annotation
-            annos["camera_dist"].append(r)
-            annos["azimuth"].append(azim_rad)
-            annos["polar"].append(polar_rad)
-            annos["fov_rad"].append(fov)
+    
+    # Generate camera poses
+    camera_locs, annos = orbit_cameras(
+        n_azim=n_azim, n_elev=n_elev, radius=camera_distance, 
+        elev_range=(0, 60), random_offset=random_offset
+    )
+    if generate_pc:
+        assert n_sphere_cam > 0
+        sphere_cam_locs, _ = uniform_cameras(samples=n_sphere_cam, radius=camera_distance)
+        camera_locs += sphere_cam_locs
+    for loc in camera_locs:
+        loc_np = np.array(loc)
+        rotation_matrix = bproc.camera.rotation_from_forward_vec(-loc_np)
+        cam2world_matrix = bproc.math.build_transformation_mat(loc_np, rotation_matrix)
+        bproc.camera.add_camera_pose(cam2world_matrix)
 
     # Set output format
     bproc.renderer.enable_depth_output(activate_antialiasing=False)
@@ -141,8 +168,7 @@ def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distanc
     data = bproc.renderer.render()
     
     # Save images and annotations
-    pc_all = []
-    num_images = len(data["colors"])
+    num_images = len(annos["azimuth"]) 
     for i in range(num_images):
         img = data["colors"][i]
         # save image with opencv
@@ -166,30 +192,33 @@ def render_gso_object(obj_path, output_base_path, hdri_path, fov, camera_distanc
         
         # save annotation
         anno = {
-            "camera_dist": annos["camera_dist"][i],
+            "camera_dist": camera_distance,
             "azimuth": annos["azimuth"][i],
             "polar": annos["polar"][i],
-            "fov_rad": annos["fov_rad"][i],
+            "fov_rad": fov,
         }
         anno_path = os.path.join(annos_path, f"anno_{i:04d}.json")
         with open(anno_path, 'w') as f:
             json.dump(anno, f, indent=2)
-
+            
+    if generate_pc:
         # generate point cloud using back projection
-        pc_xyz = bproc.camera.pointcloud_from_depth(depth, frame=i) # [H, W, 3]
-        pc_xyz = pc_xyz[depth < 100] # [N, 3]
-        pc_rgb = diffuse # [H, W, 3]
-        pc_rgb = pc_rgb[depth < 100] # [N, 3]
-        pc = np.concatenate([pc_xyz, pc_rgb], axis=-1) # [N, 6]
-        pc_all.append(pc)
+        pc_all = []
+        for i in range(num_images, num_images + n_sphere_cam):
+            pc_xyz = bproc.camera.pointcloud_from_depth(data["depth"][i], frame=i) # [H, W, 3]
+            pc_xyz = pc_xyz[depth < 100] # [N, 3]
+            pc_rgb = data["diffuse"][i] # [H, W, 3]
+            pc_rgb = pc_rgb[depth < 100] # [N, 3]
+            pc = np.concatenate([pc_xyz, pc_rgb], axis=-1) # [N, 6]
+            pc_all.append(pc)
 
-    # Concatenate all point clouds and randomly sample 10000 points
-    points = np.concatenate(pc_all, axis=0)
-    points = points[np.random.choice(points.shape[0], 10000, replace=False)]
-    
-    # Save point cloud as PLY
-    point_cloud = trimesh.PointCloud(vertices=points[:, :3], colors=points[:, 3:])
-    point_cloud.export(os.path.join(output_base_path, "pointcloud.ply"))
+        # Concatenate all point clouds and randomly sample 10000 points
+        points = np.concatenate(pc_all, axis=0)
+        points = points[np.random.choice(points.shape[0], 10000, replace=False)]
+        
+        # Save point cloud as PLY
+        point_cloud = trimesh.PointCloud(vertices=points[:, :3], colors=points[:, 3:])
+        point_cloud.export(os.path.join(output_base_path, "pointcloud.ply"))
 
 # Function to get all HDRI files recursively
 def get_hdri_files(hdri_base_path):
@@ -206,25 +235,35 @@ def main():
                         default="examples/mesh/model.obj")
     parser.add_argument('--output', type=str, help='Path to the output directory',
                         default="examples/output")
+    parser.add_argument('--hdri_path', type=str, help='Path to the HDRI file', 
+                        default="/home/zixuan32/projects/rendering/blender_proc/assets/hdris")
     parser.add_argument('--fov', type=float, help='Field of view in radians', default=0.698132)
     parser.add_argument('--camera_distance', type=float, help='Camera distance from the object', default=1.8)
+    parser.add_argument('--resolution', type=int, help='Resolution of the output images', default=512)
+    parser.add_argument('--n_azim', type=int, help='Number of azimuth angles', default=8)
+    parser.add_argument('--n_elev', type=int, help='Number of orbits', default=4)
+    parser.add_argument('--generate_pc', type=bool, help='Generate point cloud', default=True)
+    parser.add_argument('--n_sphere_cam', type=int, help='Number of cameras on the sphere', default=100)
+    parser.add_argument('--random_offset', type=bool, help='Random offset for azimuth angles', default=False)
     args = parser.parse_args()
 
     input_path = args.input
     output_path = args.output
-    fov = args.fov
-    camera_distance = args.camera_distance
-    hdri_base_path = "/home/zixuan32/projects/rendering/blender_proc/assets/hdris"
     os.makedirs(output_path, exist_ok=True)
 
-    # Get list of HDRI files
-    hdri_files = get_hdri_files(hdri_base_path)
-
+    # Get list of HDRI files, which can be downloaded with e.g.
+    # blenderproc download haven <hdri_path>
+    hdri_files = get_hdri_files(args.hdri_path)
     if os.path.exists(input_path):
         hdri_path = random.choice(hdri_files)
         print(f"Rendering object: {input_path}")
         print(f"Using HDRI: {hdri_path}")
-        render_gso_object(input_path, output_path, hdri_path, fov, camera_distance)
+        render_gso_object(
+            input_path, output_path, hdri_path, 
+            fov=args.fov, camera_distance=args.camera_distance, resolution=args.resolution,
+            n_azim=args.n_azim, n_elev=args.n_elev, generate_pc=args.generate_pc, 
+            n_sphere_cam=args.n_sphere_cam, random_offset=args.random_offset
+        )
     else:
         print(f"Object file not found: {input_path}")
 
