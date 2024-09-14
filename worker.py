@@ -106,7 +106,8 @@ def render_gso_object(
         obj_path, output_base_path, hdri_path, 
         fov=0.698132, camera_distance=1.8, resolution=512,
         n_azim=8, n_elev=4, generate_pc=True, n_sphere_cam=100,
-        random_offset=False
+        random_offset=False, save_depths=False, save_normals=False, 
+        save_diffuses=False
     ):
                       
     bproc.init()
@@ -138,10 +139,13 @@ def render_gso_object(
     diffuses_path = os.path.join(output_base_path, "diffuses")
     annos_path = os.path.join(output_base_path, "annos")
     os.makedirs(images_path, exist_ok=True)
-    os.makedirs(depths_path, exist_ok=True)
-    os.makedirs(normals_path, exist_ok=True)
-    os.makedirs(diffuses_path, exist_ok=True)
     os.makedirs(annos_path, exist_ok=True)
+    if save_depths:
+        os.makedirs(depths_path, exist_ok=True)
+    if save_normals:
+        os.makedirs(normals_path, exist_ok=True)
+    if save_diffuses:
+        os.makedirs(diffuses_path, exist_ok=True)
     
     # Generate camera poses
     camera_locs, annos = orbit_cameras(
@@ -178,17 +182,20 @@ def render_gso_object(
         # save diffuse color
         diffuse = data["diffuse"][i]
         diffuse_path = os.path.join(diffuses_path, f"diffuse_{i:04d}.png")
-        cv2.imwrite(diffuse_path, cv2.cvtColor(diffuse, cv2.COLOR_RGB2BGR))
+        if save_diffuses:
+            cv2.imwrite(diffuse_path, cv2.cvtColor(diffuse, cv2.COLOR_RGB2BGR))
         
         # save depth as npy
         depth = data["depth"][i]
         depth_path = os.path.join(depths_path, f"depth_{i:04d}.npy")
-        np.save(depth_path, depth)
+        if save_depths:
+            np.save(depth_path, depth)
         
         # save normals as npy
         normal = data["normals"][i]
         normal_path = os.path.join(normals_path, f"normal_{i:04d}.npy")
-        np.save(normal_path, normal)
+        if save_normals:
+            np.save(normal_path, normal)
         
         # save annotation
         anno = {
@@ -245,6 +252,9 @@ def main():
     parser.add_argument('--generate_pc', type=bool, help='Generate point cloud', default=True)
     parser.add_argument('--n_sphere_cam', type=int, help='Number of cameras on the sphere', default=100)
     parser.add_argument('--random_offset', type=bool, help='Random offset for azimuth angles', default=False)
+    parser.add_argument('--save_depths', type=bool, help='Save depth rendering', default=False)
+    parser.add_argument('--save_normals', type=bool, help='Save normal rendering', default=False)
+    parser.add_argument('--save_diffuses', type=bool, help='Save diffuse rendering', default=False)
     args = parser.parse_args()
 
     input_path = args.input
@@ -262,7 +272,9 @@ def main():
             input_path, output_path, hdri_path, 
             fov=args.fov, camera_distance=args.camera_distance, resolution=args.resolution,
             n_azim=args.n_azim, n_elev=args.n_elev, generate_pc=args.generate_pc, 
-            n_sphere_cam=args.n_sphere_cam, random_offset=args.random_offset
+            n_sphere_cam=args.n_sphere_cam, random_offset=args.random_offset,
+            save_depths=args.save_depths, save_normals=args.save_normals,
+            save_diffuses=args.save_diffuses
         )
     else:
         print(f"Object file not found: {input_path}")
