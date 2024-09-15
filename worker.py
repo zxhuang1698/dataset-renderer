@@ -107,7 +107,7 @@ def render_gso_object(
         fov=0.698132, camera_distance=1.8, resolution=512,
         n_azim=8, n_elev=4, generate_pc=True, n_sphere_cam=100,
         random_offset=False, save_depths=False, save_normals=False, 
-        save_diffuses=False
+        save_diffuses=False, fov_range=0, camera_distance_range=0
     ):
                       
     bproc.init()
@@ -125,6 +125,12 @@ def render_gso_object(
     bproc.world.set_world_background_hdr_img(hdri_path)
 
     # Set up camera
+    fov = np.random.uniform(
+        fov - fov_range, fov + fov_range
+    ) if fov_range > 0 else fov
+    camera_distance = np.random.uniform(
+        camera_distance - camera_distance_range, camera_distance + camera_distance_range
+    ) if camera_distance_range > 0 else camera_distance
     bproc.camera.set_resolution(resolution, resolution)
     bproc.camera.set_intrinsics_from_blender_params(lens=fov, lens_unit="FOV")
 
@@ -236,6 +242,14 @@ def get_hdri_files(hdri_base_path):
                 hdri_files.append(os.path.join(root, file))
     return hdri_files
 
+def boolean_string(s: str) -> bool:
+    if s.lower() not in {'false', 'true'}:
+        raise ValueError('Not a valid boolean string')
+    elif s.lower() == 'true':
+        return True
+    else:
+        return False
+
 def main():
     parser = argparse.ArgumentParser(description="Render a single object with a randomly selected HDRI.")
     parser.add_argument('--input', type=str, help='Path to the input model file',
@@ -244,17 +258,19 @@ def main():
                         default="examples/output")
     parser.add_argument('--hdri_path', type=str, help='Path to the HDRI file', 
                         default="/home/zixuan32/projects/rendering/blender_proc/assets/hdris")
-    parser.add_argument('--fov', type=float, help='Field of view in radians', default=0.698132)
-    parser.add_argument('--camera_distance', type=float, help='Camera distance from the object', default=1.8)
+    parser.add_argument('--fov', type=float, help='Field of view in radians', default=0.598132)
+    parser.add_argument('--camera_distance', type=float, help='Camera distance from the object', default=2.7)
     parser.add_argument('--resolution', type=int, help='Resolution of the output images', default=512)
     parser.add_argument('--n_azim', type=int, help='Number of azimuth angles', default=8)
     parser.add_argument('--n_elev', type=int, help='Number of orbits', default=4)
-    parser.add_argument('--generate_pc', type=bool, help='Generate point cloud', default=True)
-    parser.add_argument('--n_sphere_cam', type=int, help='Number of cameras on the sphere', default=100)
-    parser.add_argument('--random_offset', type=bool, help='Random offset for azimuth angles', default=False)
-    parser.add_argument('--save_depths', type=bool, help='Save depth rendering', default=False)
-    parser.add_argument('--save_normals', type=bool, help='Save normal rendering', default=False)
-    parser.add_argument('--save_diffuses', type=bool, help='Save diffuse rendering', default=False)
+    parser.add_argument('--generate_pc', type=boolean_string, help='Generate point cloud', default=True)
+    parser.add_argument('--n_sphere_cam', type=int, help='Number of cameras on the sphere', default=32)
+    parser.add_argument('--random_offset', type=boolean_string, help='Random offset for azimuth angles', default=False)
+    parser.add_argument('--save_depths', type=boolean_string, help='Save depth rendering', default=False)
+    parser.add_argument('--save_normals', type=boolean_string, help='Save normal rendering', default=False)
+    parser.add_argument('--save_diffuses', type=boolean_string, help='Save diffuse rendering', default=False)
+    parser.add_argument('--fov_range', type=float, help='Range of field of view in radians', default=0)
+    parser.add_argument('--camera_distance_range', type=float, help='Range of camera distance from the object', default=0)
     args = parser.parse_args()
 
     input_path = args.input
@@ -274,7 +290,8 @@ def main():
             n_azim=args.n_azim, n_elev=args.n_elev, generate_pc=args.generate_pc, 
             n_sphere_cam=args.n_sphere_cam, random_offset=args.random_offset,
             save_depths=args.save_depths, save_normals=args.save_normals,
-            save_diffuses=args.save_diffuses
+            save_diffuses=args.save_diffuses, fov_range=args.fov_range, 
+            camera_distance_range=args.camera_distance_range
         )
     else:
         print(f"Object file not found: {input_path}")

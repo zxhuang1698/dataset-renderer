@@ -1,7 +1,9 @@
 {
     "hdri_path": "/home/zixuan32/projects/rendering/blender_proc/assets/hdris",
-    "fov": 0.698132,
-    "camera_distance": 1.8,
+    "fov": 0.598132,
+    "fov_range": 0.1,
+    "camera_distance": 2.7,
+    "camera_distance_range": 0.0,
     "resolution": 512,
     "n_azim": 8,
     "n_elev": 4,
