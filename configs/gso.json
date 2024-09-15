@@ -1,0 +1,14 @@
+{
+    "hdri_path": "/home/zixuan32/projects/rendering/blender_proc/assets/hdris",
+    "fov": 0.698132,
+    "camera_distance": 1.8,
+    "resolution": 512,
+    "n_azim": 8,
+    "n_elev": 4,
+    "generate_pc": true,
+    "n_sphere_cam": 32,
+    "random_offset": false,
+    "save_depths": false,
+    "save_normals": false,
+    "save_diffuses": false
+}
