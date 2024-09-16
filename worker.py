@@ -182,24 +182,24 @@ def render_gso_object(
     for i in range(num_images):
         img = data["colors"][i]
         # save image with opencv
-        image_path = os.path.join(images_path, f"image_{i:04d}.png")
+        image_path = os.path.join(images_path, f"{i:04d}.png")
         cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA))
         
         # save diffuse color
         diffuse = data["diffuse"][i]
-        diffuse_path = os.path.join(diffuses_path, f"diffuse_{i:04d}.png")
+        diffuse_path = os.path.join(diffuses_path, f"{i:04d}.png")
         if save_diffuses:
             cv2.imwrite(diffuse_path, cv2.cvtColor(diffuse, cv2.COLOR_RGB2BGR))
         
         # save depth as npy
         depth = data["depth"][i]
-        depth_path = os.path.join(depths_path, f"depth_{i:04d}.npy")
+        depth_path = os.path.join(depths_path, f"{i:04d}.npy")
         if save_depths:
             np.save(depth_path, depth)
         
         # save normals as npy
         normal = data["normals"][i]
-        normal_path = os.path.join(normals_path, f"normal_{i:04d}.npy")
+        normal_path = os.path.join(normals_path, f"{i:04d}.npy")
         if save_normals:
             np.save(normal_path, normal)
         
@@ -210,7 +210,7 @@ def render_gso_object(
             "polar": annos["polar"][i],
             "fov_rad": fov,
         }
-        anno_path = os.path.join(annos_path, f"anno_{i:04d}.json")
+        anno_path = os.path.join(annos_path, f"{i:04d}.json")
         with open(anno_path, 'w') as f:
             json.dump(anno, f, indent=2)
             
@@ -219,9 +219,9 @@ def render_gso_object(
         pc_all = []
         for i in range(num_images, num_images + n_sphere_cam):
             pc_xyz = bproc.camera.pointcloud_from_depth(data["depth"][i], frame=i) # [H, W, 3]
-            pc_xyz = pc_xyz[depth < 100] # [N, 3]
+            pc_xyz = pc_xyz[data["depth"][i] < 100] # [N, 3]
             pc_rgb = data["diffuse"][i] # [H, W, 3]
-            pc_rgb = pc_rgb[depth < 100] # [N, 3]
+            pc_rgb = pc_rgb[data["depth"][i] < 100] # [N, 3]
             pc = np.concatenate([pc_xyz, pc_rgb], axis=-1) # [N, 6]
             pc_all.append(pc)
 
