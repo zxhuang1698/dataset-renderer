@@ -7,6 +7,7 @@
     "resolution": 512,
     "n_azim": 8,
     "n_elev": 4,
+    "max_elev": 30.0,
     "generate_pc": true,
     "n_sphere_cam": 32,
     "random_offset": false,

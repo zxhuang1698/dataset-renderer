@@ -3,6 +3,7 @@ import json
 import logging
 import multiprocessing
 import subprocess
+import shutil
 from pathlib import Path
 from argparse import ArgumentParser
 
@@ -69,8 +70,10 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     setup_logging(os.path.join(args.output_dir, 'rendering.log'))
 
+    # read the config file and copy it to the output directory
     with open(args.config, 'r') as f:
         common_args = json.load(f)
+    shutil.copy(args.config, os.path.join(args.output_dir, 'config.json'))
 
     obj_files = [str(p) for p in Path(args.dataset_dir).rglob('*.obj')]
     obj_files.sort()

@@ -107,7 +107,8 @@ def render_gso_object(
         fov=0.698132, camera_distance=1.8, resolution=512,
         n_azim=8, n_elev=4, generate_pc=True, n_sphere_cam=100,
         random_offset=False, save_depths=False, save_normals=False, 
-        save_diffuses=False, fov_range=0, camera_distance_range=0
+        save_diffuses=False, fov_range=0, camera_distance_range=0,
+        max_elev=60
     ):
                       
     bproc.init()
@@ -156,7 +157,7 @@ def render_gso_object(
     # Generate camera poses
     camera_locs, annos = orbit_cameras(
         n_azim=n_azim, n_elev=n_elev, radius=camera_distance, 
-        elev_range=(0, 60), random_offset=random_offset
+        elev_range=(0, max_elev), random_offset=random_offset
     )
     if generate_pc:
         assert n_sphere_cam > 0
@@ -271,6 +272,7 @@ def main():
     parser.add_argument('--save_diffuses', type=boolean_string, help='Save diffuse rendering', default=False)
     parser.add_argument('--fov_range', type=float, help='Range of field of view in radians', default=0)
     parser.add_argument('--camera_distance_range', type=float, help='Range of camera distance from the object', default=0)
+    parser.add_argument('--max_elev', type=float, help='Max elevation angle in degrees', default=60)
     args = parser.parse_args()
 
     input_path = args.input
@@ -291,7 +293,7 @@ def main():
             n_sphere_cam=args.n_sphere_cam, random_offset=args.random_offset,
             save_depths=args.save_depths, save_normals=args.save_normals,
             save_diffuses=args.save_diffuses, fov_range=args.fov_range, 
-            camera_distance_range=args.camera_distance_range
+            camera_distance_range=args.camera_distance_range, max_elev=args.max_elev
         )
     else:
         print(f"Object file not found: {input_path}")
