@@ -104,7 +104,7 @@ def orbit_cameras(n_azim=8, n_elev=4, radius=1.8, elev_range=(0, 60), random_off
 
 def render_gso_object(
         obj_path, output_base_path, hdri_path, 
-        fov=0.598132, camera_distance=2.3, resolution=512,
+        fov=0.598132, camera_distance=2.4, resolution=512,
         n_azim=8, n_elev=4, generate_pc=True, n_sphere_cam=100,
         random_offset=False, save_depths=False, save_normals=False, 
         save_diffuses=False, fov_range=0, camera_distance_range=0,
@@ -266,7 +266,7 @@ def main():
     parser.add_argument('--base_fov', type=float, 
                         help='Base field of view in radians (actual fov affected by fov_range)', default=0.598132)
     parser.add_argument('--base_cam_dist', type=float, 
-                        help='Base camera distance from the object (actual cam_dist affected by fov_range and camera_distance_range)', default=2.3)
+                        help='Base camera distance from the object (actual cam_dist affected by fov_range and camera_distance_range)', default=2.4)
     parser.add_argument('--resolution', type=int, help='Resolution of the output images', default=512)
     parser.add_argument('--n_azim', type=int, help='Number of azimuth angles', default=8)
     parser.add_argument('--n_elev', type=int, help='Number of orbits', default=4)
