@@ -53,7 +53,6 @@ def render_object(args):
         "object": obj_path,
         "output": obj_output_dir,
         "status": "success" if result.returncode == 0 else "failure",
-        # "log": result.stdout + result.stderr,
         "cmd": ' '.join(cmd),
         "error": result.stderr if result.returncode != 0 else None
     }

@@ -104,7 +104,7 @@ def orbit_cameras(n_azim=8, n_elev=4, radius=1.8, elev_range=(0, 60), random_off
 
 def render_gso_object(
         obj_path, output_base_path, hdri_path, 
-        fov=0.698132, camera_distance=1.8, resolution=512,
+        fov=0.598132, camera_distance=2.3, resolution=512,
         n_azim=8, n_elev=4, generate_pc=True, n_sphere_cam=100,
         random_offset=False, save_depths=False, save_normals=False, 
         save_diffuses=False, fov_range=0, camera_distance_range=0,
@@ -126,9 +126,13 @@ def render_gso_object(
     bproc.world.set_world_background_hdr_img(hdri_path)
 
     # Set up camera
+    original_fov = fov
     fov = np.random.uniform(
         fov - fov_range, fov + fov_range
     ) if fov_range > 0 else fov
+    # Adjust camera distance proportionally to the focal length
+    focal_ratio = math.tan(original_fov / 2) / math.tan(fov / 2)
+    camera_distance *= focal_ratio
     camera_distance = np.random.uniform(
         camera_distance - camera_distance_range, camera_distance + camera_distance_range
     ) if camera_distance_range > 0 else camera_distance
@@ -259,8 +263,10 @@ def main():
                         default="examples/output")
     parser.add_argument('--hdri_path', type=str, help='Path to the HDRI file', 
                         default="/home/zixuan32/projects/rendering/blender_proc/assets/hdris")
-    parser.add_argument('--fov', type=float, help='Field of view in radians', default=0.598132)
-    parser.add_argument('--camera_distance', type=float, help='Camera distance from the object', default=2.7)
+    parser.add_argument('--base_fov', type=float, 
+                        help='Base field of view in radians (actual fov affected by fov_range)', default=0.598132)
+    parser.add_argument('--base_cam_dist', type=float, 
+                        help='Base camera distance from the object (actual cam_dist affected by fov_range and camera_distance_range)', default=2.3)
     parser.add_argument('--resolution', type=int, help='Resolution of the output images', default=512)
     parser.add_argument('--n_azim', type=int, help='Number of azimuth angles', default=8)
     parser.add_argument('--n_elev', type=int, help='Number of orbits', default=4)
@@ -271,7 +277,7 @@ def main():
     parser.add_argument('--save_normals', type=boolean_string, help='Save normal rendering', default=False)
     parser.add_argument('--save_diffuses', type=boolean_string, help='Save diffuse rendering', default=False)
     parser.add_argument('--fov_range', type=float, help='Range of field of view in radians', default=0)
-    parser.add_argument('--camera_distance_range', type=float, help='Range of camera distance from the object', default=0)
+    parser.add_argument('--cam_dist_range', type=float, help='Range of camera distance from the object', default=0)
     parser.add_argument('--max_elev', type=float, help='Max elevation angle in degrees', default=60)
     args = parser.parse_args()
 
@@ -288,12 +294,12 @@ def main():
         print(f"Using HDRI: {hdri_path}")
         render_gso_object(
             input_path, output_path, hdri_path, 
-            fov=args.fov, camera_distance=args.camera_distance, resolution=args.resolution,
+            fov=args.base_fov, camera_distance=args.base_cam_dist, resolution=args.resolution,
             n_azim=args.n_azim, n_elev=args.n_elev, generate_pc=args.generate_pc, 
             n_sphere_cam=args.n_sphere_cam, random_offset=args.random_offset,
             save_depths=args.save_depths, save_normals=args.save_normals,
             save_diffuses=args.save_diffuses, fov_range=args.fov_range, 
-            camera_distance_range=args.camera_distance_range, max_elev=args.max_elev
+            camera_distance_range=args.cam_dist_range, max_elev=args.max_elev
         )
     else:
         print(f"Object file not found: {input_path}")
