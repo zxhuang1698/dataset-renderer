@@ -17,12 +17,15 @@ def setup_logging(log_file):
         ]
     )
 
+def read_object_paths(list_file):
+    with open(list_file, 'r') as f:
+        lines = f.readlines()
+    # Each line is structured as "name_of_object  path_to_object", so we take both parts
+    object_paths_and_names = [(line.split()[1], line.split()[0]) for line in lines]
+    return object_paths_and_names
+
 def render_object(args):
-    obj_path, dataset_name, output_dir, worker_script, common_args = args
-    if dataset_name == 'gso':
-        obj_name = obj_path.split('/')[-3]
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+    (obj_path, obj_name), output_dir, worker_script, common_args = args
     obj_output_dir = os.path.join(output_dir, obj_name)
     os.makedirs(obj_output_dir, exist_ok=True)
     
@@ -57,16 +60,16 @@ def render_object(args):
 
 def main():
     parser = ArgumentParser(description="Distributed rendering of objects using BlenderProc.")
-    parser.add_argument('--dataset_dir', type=str, default='/home/zixuan32/datasets/gso_mesh',
-                        help='Path to the dataset directory containing object files')
-    parser.add_argument('--dataset', type=str, default='gso', help='Name of the dataset')
     parser.add_argument('--output_dir', type=str, default='outputs/test', help='Path to the output directory')
     parser.add_argument('--worker_script', type=str, default='worker.py', help='Path to the worker script (worker.py)')
     parser.add_argument('--num_workers', type=int, default=6, help='Number of parallel workers')
     parser.add_argument('--config', type=str, default='configs/gso.json', 
                         help='Path to the JSON file containing common arguments for the worker script')
+    parser.add_argument('--list_file', type=str, default='data_prep/gso/shard_lists/0.txt',
+                        help='Path to the list file containing object paths')
     args = parser.parse_args()
 
+    shutil.rmtree(args.output_dir, ignore_errors=True)
     os.makedirs(args.output_dir, exist_ok=True)
     setup_logging(os.path.join(args.output_dir, 'rendering.log'))
 
@@ -75,11 +78,10 @@ def main():
         common_args = json.load(f)
     shutil.copy(args.config, os.path.join(args.output_dir, 'config.json'))
 
-    obj_files = [str(p) for p in Path(args.dataset_dir).rglob('*.obj')]
-    obj_files.sort()
-    logging.info(f"Found {len(obj_files)} object files in {args.dataset_dir}")
+    obj_files_and_names = read_object_paths(args.list_file)
+    logging.info(f"Found {len(obj_files_and_names)} object files in {args.list_file}")
 
-    pool_args = [(obj, args.dataset, args.output_dir, args.worker_script, common_args) for obj in obj_files]
+    pool_args = [(obj, args.output_dir, args.worker_script, common_args) for obj in obj_files_and_names]
     with multiprocessing.Pool(args.num_workers) as pool:
         results = pool.map(render_object, pool_args)
 
