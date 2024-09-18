@@ -14,5 +14,5 @@
     "save_depths": false,
     "save_normals": false,
     "save_diffuses": false,
-    "prerotation": "X0-Y0-Z0" 
+    "prerotation": "X90-Y0-Z0" 
 }

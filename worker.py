@@ -104,11 +104,11 @@ def orbit_cameras(n_azim=8, n_elev=4, radius=1.8, elev_range=(0, 60), random_off
 
 def render_gso_object(
         obj_path, output_base_path, hdri_path, 
-        fov=0.598132, camera_distance=2.4, resolution=512,
+        fov=0.598132, camera_distance=2.5, resolution=512,
         n_azim=8, n_elev=4, generate_pc=True, n_sphere_cam=100,
         random_offset=False, save_depths=False, save_normals=False, 
         save_diffuses=False, fov_range=0, camera_distance_range=0,
-        max_elev=60
+        max_elev=60, prerotation="X0-Y0-Z0"
     ):
                       
     bproc.init()
@@ -118,6 +118,12 @@ def render_gso_object(
     # Reset the rotation of all objects
     for obj in objs:
         obj.set_rotation_euler([0, 0, 0])
+        obj.persist_transformation_into_mesh()
+    
+    # Apply prerotation
+    rotation_degrees = [float(x[1:])/180*np.pi for x in prerotation.split('-')]
+    for obj in objs:
+        obj.set_rotation_euler(rotation_degrees)
         obj.persist_transformation_into_mesh()
     
     normalize_objs(objs)
@@ -266,7 +272,7 @@ def main():
     parser.add_argument('--base_fov', type=float, 
                         help='Base field of view in radians (actual fov affected by fov_range)', default=0.598132)
     parser.add_argument('--base_cam_dist', type=float, 
-                        help='Base camera distance from the object (actual cam_dist affected by fov_range and camera_distance_range)', default=2.4)
+                        help='Base camera distance from the object (actual cam_dist affected by fov_range and camera_distance_range)', default=2.5)
     parser.add_argument('--resolution', type=int, help='Resolution of the output images', default=512)
     parser.add_argument('--n_azim', type=int, help='Number of azimuth angles', default=8)
     parser.add_argument('--n_elev', type=int, help='Number of orbits', default=4)
@@ -279,6 +285,7 @@ def main():
     parser.add_argument('--fov_range', type=float, help='Range of field of view in radians', default=0)
     parser.add_argument('--cam_dist_range', type=float, help='Range of camera distance from the object', default=0)
     parser.add_argument('--max_elev', type=float, help='Max elevation angle in degrees', default=60)
+    parser.add_argument('--prerotation', type=str, help='Prerotation of the object in degrees', default="X0-Y0-Z0")
     args = parser.parse_args()
 
     input_path = args.input
@@ -299,7 +306,8 @@ def main():
             n_sphere_cam=args.n_sphere_cam, random_offset=args.random_offset,
             save_depths=args.save_depths, save_normals=args.save_normals,
             save_diffuses=args.save_diffuses, fov_range=args.fov_range, 
-            camera_distance_range=args.cam_dist_range, max_elev=args.max_elev
+            camera_distance_range=args.cam_dist_range, max_elev=args.max_elev,
+            prerotation=args.prerotation
         )
     else:
         print(f"Object file not found: {input_path}")
