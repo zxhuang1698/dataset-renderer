@@ -10,7 +10,7 @@
     "max_elev": 30.0,
     "generate_pc": true,
     "n_sphere_cam": 32,
-    "random_offset": false,
+    "random_offset": true,
     "save_depths": false,
     "save_normals": false,
     "save_diffuses": false,
