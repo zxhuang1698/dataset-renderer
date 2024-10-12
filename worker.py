@@ -7,6 +7,7 @@ import random
 import trimesh
 import cv2
 import argparse
+import shutil
 from typing import List
 
 def find_minimum_bounding_cuboid(cuboids):
@@ -225,6 +226,10 @@ def render_gso_object(
         with open(anno_path, 'w') as f:
             json.dump(anno, f, indent=2)
             
+        # copy hdri
+        hdri_ext = hdri_path.split('.')[-1]
+        shutil.copy(hdri_path, os.path.join(output_base_path, f"envmap.{hdri_ext}"))
+        
     if generate_pc:
         # generate point cloud using back projection
         pc_all = []
